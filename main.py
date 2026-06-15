@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
 
 # 1. 웹앱 기본 설정
 st.set_page_config(
@@ -69,110 +70,48 @@ if page == "Page 1: 왜 약을 섞어 먹으면 위험할까?":
             st.plotly_chart(fig, use_container_width=True)
 
 # ==========================================
-# PAGE 2: 주요 병용금기 성분 가이드 (대폭 수정)
+# PAGE 2: 주요 병용금기 성분 가이드
 # ==========================================
 elif page == "Page 2: 주요 병용금기 성분 가이드":
     st.title("🔍 알아두어야 할 주요 병용금기 성분 가이드")
-    st.markdown("어려운 성분명을 몰라도 괜찮습니다! **약물 이름(제품명)** 또는 **성분명**을 편하게 입력하여 복용 중이거나 복용 예정인 약들을 **여러 개 선택**해 보세요.")
+    st.markdown("데이터베이스에 등록된 **실제 약물 이름(제품명)** 또는 **성분명**을 선택하여 복용 중인 약을 여러 개 체크해 보세요.")
     st.markdown("---")
     
     if df_contra is not None:
-        # 매핑용 사전 데이터 구축 (검색 효율화 및 일반인 편의성 향상)
-        # 약물 사전: { "표시할 이름 (제품명 또는 성분명)": "실제 내부 성분명" }
+        # 제품명 가독성을 높이기 위한 정제 함수 (회사명, 용량 정보 제거 등)
+        def clean_product_name(name):
+            if not name: return ""
+            # 괄호 및 단위 제거 (예: 키벡사정_(1정) -> 키벡사정)
+            name = re.sub(r'_\(.*?\)|_.*?밀리그램|_.*?mg', '', name)
+            name = name.split('(')[0] # 한글명만 추출
+            return name.strip()
+
         drug_dict = {}
+        sample_placeholders = []  # 실제 파일에 있는 단어로 예시를 만들기 위함
         
         for _, row in df_contra.iterrows():
             ing1, ing2 = row['성분명1'], row['성분명2']
             prod1, prod2 = row['제품명1'], row['제품명2']
             
-            # 성분명 등록
+            c_prod1 = clean_product_name(prod1)
+            c_prod2 = clean_product_name(prod2)
+            
+            # 1) 성분명 등록
             if ing1: drug_dict[f"[성분] {ing1}"] = ing1
             if ing2: drug_dict[f"[성분] {ing2}"] = ing2
-            # 제품명 등록 (사용자가 찾기 쉽게 제품명 뒤에 성분명도 괄호로 표기)
-            if prod1 and ing1: drug_dict[f"[제품] {prod1} ({ing1})"] = ing1
-            if prod2 and ing2: drug_dict[f"[제품] {prod2} ({ing2})"] = ing2
+            
+            # 2) 제품명 등록 (실제 존재하는 제품명만 가공하여 매핑)
+            if c_prod1 and ing1: 
+                drug_dict[f"[제품] {c_prod1} ({ing1})"] = ing1
+                if len(sample_placeholders) < 3 and c_prod1 not in sample_placeholders:
+                    sample_placeholders.append(c_prod1)
+            if c_prod2 and ing2: 
+                drug_dict[f"[제품] {c_prod2} ({ing2})"] = ing2
+                if len(sample_placeholders) < 3 and c_prod2 not in sample_placeholders:
+                    sample_placeholders.append(c_prod2)
 
-        # 가나다 및 알파벳 순 정렬
+        # 가나다 순 정렬
         sorted_display_names = sorted(list(drug_dict.keys()))
         
-        # 🌟 핵심 기능: 멀티 셀렉트 박스 (원하는 약물을 여러 개 선택 가능)
-        selected_displays = st.multiselect(
-            "💊 복용 중이거나 확인할 약물들을 모두 선택하세요 (한글/영문 검색 가능):",
-            options=sorted_display_names,
-            placeholder="예: 타이레놀, 아스피린, ibuprofen 등을 검색하여 선택"
-        )
-        
-        # 사용자가 선택한 아이템들의 실제 '성분명' 리스트 추출
-        selected_ingredients = list(set([drug_dict[name] for name in selected_displays]))
-        
-        if selected_displays:
-            st.markdown("### 🛒 선택한 약물 성분 목록")
-            st.write(", ".join([f"`{ing}`" for ing in selected_ingredients]))
-            
-            st.markdown("---")
-            st.markdown("### 🛡️ 병용금기 교차 검증 결과")
-            
-            # 1단계: 선택한 약물들 '끼리' 서로 금기 조합이 있는지 검사 (상호 교차 검증)
-            danger_pairs_found = False
-            
-            if len(selected_ingredients) >= 2:
-                st.subheader("🚨 내 장바구니 약물 간 위험 조합 체크")
-                
-                # 선택된 성분들의 쌍(Pair)을 확인
-                for i in range(len(selected_ingredients)):
-                    for j in range(i + 1, len(selected_ingredients)):
-                        ingA = selected_ingredients[i]
-                        ingB = selected_ingredients[j]
-                        
-                        # 두 성분이 데이터베이스에서 병용금기로 묶여있는지 확인
-                        match_df = df_contra[
-                            ((df_contra['성분명1'] == ingA) & (df_contra['성분명2'] == ingB)) |
-                            ((df_contra['성분명1'] == ingB) & (df_contra['성분명2'] == ingA))
-                        ]
-                        
-                        if not match_df.empty:
-                            danger_pairs_found = True
-                            reason = match_df.iloc[0]['금기사유']
-                            st.error(f"⚠️ **위험! 동시 복용 금지**: `{ingA}` 와 `{ingB}` 조합은 함께 드시면 안 됩니다.")
-                            st.caption(f"**이유/부작용:** {reason}")
-                
-                if not danger_pairs_found:
-                    st.success("✅ 선택하신 약물들 상호 간에는 함께 먹으면 안 되는 금기 조합이 발견되지 않았습니다.")
-            
-            # 2단계: 선택한 각 약물들이 '전체 데이터베이스'에서 어떤 약들과 금기인지 개별 조회 리스트 제공
-            st.write("")
-            st.subheader("🔍 각 약물별 전체 병용금기 상대 성분 안내")
-            st.caption("내가 선택한 약이 이외에 또 어떤 약들과 만나면 안 되는지 개별적으로 확인할 수 있습니다.")
-            
-            for ing in selected_ingredients:
-                res_df = df_contra[(df_contra['성분명1'] == ing) | (df_contra['성분명2'] == ing)]
-                
-                with st.expander(f"📋 {ing} 성분의 전체 금기 리스트 보기 (총 {len(res_df)}건)"):
-                    if not res_df.empty:
-                        display_data = []
-                        for _, row in res_df.iterrows():
-                            if row['성분명1'] == ing:
-                                contra_ing = row['성분명2']
-                                contra_prod = row['제품명2']
-                            else:
-                                contra_ing = row['성분명1']
-                                contra_prod = row['제품명1']
-                                
-                            display_data.append({
-                                "함께 먹으면 안 되는 성분": contra_ing,
-                                "상대 약물 제품명 예시": contra_prod,
-                                "위험 사유": row['금기사유']
-                            })
-                        
-                        display_df = pd.DataFrame(display_data).drop_duplicates()
-                        
-                        # 표 형태로 깔끔하게 출력
-                        st.dataframe(
-                            display_df, 
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                    else:
-                        st.write("이 성분은 데이터베이스에 등록된 금기 조합이 없습니다.")
-        else:
-            st.info("💡 위의 검색창에 드시는 약 이름을 한글이나 영어로 입력하여 선택해 주세요. 여러 개를 동시에 고를 수 있습니다.")
+        # 실제 파일에 존재하는 첫 2~3개 제품명을 추출하여 힌트 메시지 자동 생성
+        placeholder_text = f"예
