@@ -13,11 +13,10 @@ st.set_page_config(
 # 2. 데이터 로드 함수
 @st.cache_data
 def load_incident_data():
-    paths = ["한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv"]
+    paths = ["한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "main.py"]
     for p in paths:
         try: return pd.read_csv(p, encoding="cp949")
-        except FileNotFoundError: continue
-    st.error("이상사례 데이터 파일을 찾을 수 없습니다.")
+        except: continue
     return None
 
 @st.cache_data
@@ -26,12 +25,10 @@ def load_contra_data():
     for p in paths:
         try:
             df = pd.read_csv(p, encoding="cp949")
-            # 모든 텍스트 컬럼 결측치 제거 및 문자열 변환
             for col in ['성분명1', '성분명2', '제품명1', '제품명2']:
                 df[col] = df[col].fillna('').astype(str).str.strip()
             return df
-        except FileNotFoundError: continue
-    st.error("병용금기 데이터 파일을 찾을 수 없습니다.")
+        except: continue
     return None
 
 df_incident = load_incident_data()
@@ -58,16 +55,19 @@ if page == "Page 1: 왜 약을 섞어 먹으면 위험할까?":
     
     if df_incident is not None:
         st.subheader("📊 국내 의약품 이상사례 보고 현황 (최근 5개년 TOP 5)")
-        top_2024 = df_incident[['순위', '연도별증상(2024)', '연도별보고건수(2024)']].head(5)
-        top_2024.columns = ['순위', '부작용 증상', '보고 건수(건)']
-        
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.dataframe(top_2024, use_container_width=True, hide_index=True)
-        with col2:
-            fig = px.bar(top_2024, x='부작용 증상', y='보고 건수(건)', color='부작용 증상', text_auto=True)
-            fig.update_layout(showlegend=False, height=300)
-            st.plotly_chart(fig, use_container_width=True)
+        try:
+            top_2024 = df_incident[['순위', '연도별증상(2024)', '연도별보고건수(2024)']].head(5)
+            top_2024.columns = ['순위', '부작용 증상', '보고 건수(건)']
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.dataframe(top_2024, use_container_width=True, hide_index=True)
+            with col2:
+                fig = px.bar(top_2024, x='부작용 증상', y='보고 건수(건)', color='부작용 증상', text_auto=True)
+                fig.update_layout(showlegend=False, height=300)
+                st.plotly_chart(fig, use_container_width=True)
+        except:
+            st.warning("시각화 데이터를 처리하는 중 일부 문제가 발생했습니다.")
 
 # ==========================================
 # PAGE 2: 주요 병용금기 성분 가이드
@@ -78,40 +78,45 @@ elif page == "Page 2: 주요 병용금기 성분 가이드":
     st.markdown("---")
     
     if df_contra is not None:
-        # 제품명 가독성을 높이기 위한 정제 함수 (회사명, 용량 정보 제거 등)
+        # 일반인이 알아보기 쉽게 제품명 가공하는 함수
         def clean_product_name(name):
             if not name: return ""
-            # 괄호 및 단위 제거 (예: 키벡사정_(1정) -> 키벡사정)
-            name = re.sub(r'_\(.*?\)|_.*?밀리그램|_.*?mg', '', name)
-            name = name.split('(')[0] # 한글명만 추출
+            name = re.sub(r'_\(.*?\)|_.*?밀리그램|_.*?mg|_.*?밀리그람', '', name)
+            name = name.split('(')[0]
             return name.strip()
 
         drug_dict = {}
-        sample_placeholders = []  # 실제 파일에 있는 단어로 예시를 만들기 위함
+        sample_placeholders = []
         
-        for _, row in df_contra.iterrows():
+        for idx, row in df_contra.iterrows():
             ing1, ing2 = row['성분명1'], row['성분명2']
             prod1, prod2 = row['제품명1'], row['제품명2']
             
             c_prod1 = clean_product_name(prod1)
             c_prod2 = clean_product_name(prod2)
             
-            # 1) 성분명 등록
+            # 성분명 추가
             if ing1: drug_dict[f"[성분] {ing1}"] = ing1
             if ing2: drug_dict[f"[성분] {ing2}"] = ing2
             
-            # 2) 제품명 등록 (실제 존재하는 제품명만 가공하여 매핑)
+            # 제품명 추가
             if c_prod1 and ing1: 
                 drug_dict[f"[제품] {c_prod1} ({ing1})"] = ing1
-                if len(sample_placeholders) < 3 and c_prod1 not in sample_placeholders:
+                if c_prod1 not in sample_placeholders:
                     sample_placeholders.append(c_prod1)
             if c_prod2 and ing2: 
                 drug_dict[f"[제품] {c_prod2} ({ing2})"] = ing2
-                if len(sample_placeholders) < 3 and c_prod2 not in sample_placeholders:
+                if c_prod2 not in sample_placeholders:
                     sample_placeholders.append(c_prod2)
 
         # 가나다 순 정렬
         sorted_display_names = sorted(list(drug_dict.keys()))
         
-        # 실제 파일에 존재하는 첫 2~3개 제품명을 추출하여 힌트 메시지 자동 생성
-        placeholder_text = f"예
+        # ⚠️ SyntaxError가 발생했던 줄바꿈 문장 결합부를 안전하게 변수 처리함
+        samples_str = ", ".join(sample_placeholders[:3])
+        placeholder_text = "예: " + samples_str + " 등을 검색하여 선택"
+        
+        # 🌟 실제 데이터 기반 멀티 셀렉트 박스
+        selected_displays = st.multiselect(
+            "💊 복용 중이거나 확인할 약물들을 모두 선택하세요 (리스트 선택 및 검색 지원):",
+            options=sorted
