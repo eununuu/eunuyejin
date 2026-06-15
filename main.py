@@ -13,22 +13,31 @@ st.set_page_config(
 # 2. 데이터 로드 함수
 @st.cache_data
 def load_incident_data():
-    paths = ["한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "main.py"]
+    paths = [
+        "한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv",
+        "data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv"
+    ]
     for p in paths:
-        try: return pd.read_csv(p, encoding="cp949")
-        except: continue
+        try:
+            return pd.read_csv(p, encoding="cp949")
+        except:
+            continue
     return None
 
 @st.cache_data
 def load_contra_data():
-    paths = ["한국의약품안전관리원_병용금기약물_20240625_2.csv", "data/한국의약품안전관리원_병용금기약물_20240625_2.csv"]
+    paths = [
+        "한국의약품안전관리원_병용금기약물_20240625_2.csv",
+        "data/한국의약품안전관리원_병용금기약물_20240625_2.csv"
+    ]
     for p in paths:
         try:
             df = pd.read_csv(p, encoding="cp949")
             for col in ['성분명1', '성분명2', '제품명1', '제품명2']:
                 df[col] = df[col].fillna('').astype(str).str.strip()
             return df
-        except: continue
+        except:
+            continue
     return None
 
 df_incident = load_incident_data()
@@ -68,6 +77,8 @@ if page == "Page 1: 왜 약을 섞어 먹으면 위험할까?":
                 st.plotly_chart(fig, use_container_width=True)
         except:
             st.warning("시각화 데이터를 처리하는 중 일부 문제가 발생했습니다.")
+    else:
+        st.warning("이상사례 보고현황 CSV 데이터를 찾을 수 없어 통계 그래프를 표시할 수 없습니다.")
 
 # ==========================================
 # PAGE 2: 주요 병용금기 성분 가이드
@@ -78,11 +89,11 @@ elif page == "Page 2: 주요 병용금기 성분 가이드":
     st.markdown("---")
     
     if df_contra is not None:
-        # 일반인이 알아보기 쉽게 제품명 가공하는 함수
+        # 일반인이 알아보기 쉽게 제품명을 정제하는 함수
         def clean_product_name(name):
-            if not name: return ""
-            name = re.sub(r'_\(.*?\)|_.*?밀리그램|_.*?mg|_.*?밀리그람', '', name)
-            name = name.split('(')[0]
+            if not name: 
+                return ""
+            name = re.sub(r'_\(.*?\)|\(.*?\)|_.*?밀리그램|_.*?mg|_.*?밀리그람', '', name)
             return name.strip()
 
         drug_dict = {}
@@ -95,11 +106,13 @@ elif page == "Page 2: 주요 병용금기 성분 가이드":
             c_prod1 = clean_product_name(prod1)
             c_prod2 = clean_product_name(prod2)
             
-            # 성분명 추가
-            if ing1: drug_dict[f"[성분] {ing1}"] = ing1
-            if ing2: drug_dict[f"[성분] {ing2}"] = ing2
+            # 1) 성분명 사전 등록
+            if ing1: 
+                drug_dict[f"[성분] {ing1}"] = ing1
+            if ing2: 
+                drug_dict[f"[성분] {ing2}"] = ing2
             
-            # 제품명 추가
+            # 2) 제품명 사전 등록
             if c_prod1 and ing1: 
                 drug_dict[f"[제품] {c_prod1} ({ing1})"] = ing1
                 if c_prod1 not in sample_placeholders:
@@ -109,14 +122,15 @@ elif page == "Page 2: 주요 병용금기 성분 가이드":
                 if c_prod2 not in sample_placeholders:
                     sample_placeholders.append(c_prod2)
 
-        # 가나다 순 정렬
+        # 사전의 Key값들을 가나다/ABC 순서로 정렬
         sorted_display_names = sorted(list(drug_dict.keys()))
         
-        # ⚠️ SyntaxError가 발생했던 줄바꿈 문장 결합부를 안전하게 변수 처리함
-        samples_str = ", ".join(sample_placeholders[:3])
-        placeholder_text = "예: " + samples_str + " 등을 검색하여 선택"
+        # 안내 문구(Placeholder)를 에러가 절대 안 나도록 가장 안전하게 생성
+        if len(sample_placeholders) >= 2:
+            hint = sample_placeholders[0] + ", " + sample_placeholders[1]
+            placeholder_text = "예: " + hint + " 등을 검색 또는 선택"
+        else:
+            placeholder_text = "검색할 의약품명을 입력하세요."
         
-        # 🌟 실제 데이터 기반 멀티 셀렉트 박스
-        selected_displays = st.multiselect(
-            "💊 복용 중이거나 확인할 약물들을 모두 선택하세요 (리스트 선택 및 검색 지원):",
-            options=sorted
+        # 🌟 실제 데이터 기반 멀티 셀렉트 박스 (오류 구간 완벽 수정)
+        selected_displays =
