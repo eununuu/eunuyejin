@@ -13,8 +13,8 @@ st.set_page_config(
 @st.cache_data
 def load_incident_data():
     try:
-        # 파일 인코딩에 맞춰 cp949 적용
-        df = pd.read_csv("data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", encoding="cp949")
+        # 경로를 파일명으로만 변경
+        df = pd.read_csv("한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", encoding="cp949")
         return df
     except Exception as e:
         st.error(f"이상사례 데이터를 불러오는 중 오류가 발생했습니다: {e}")
@@ -23,15 +23,15 @@ def load_incident_data():
 @st.cache_data
 def load_contra_data():
     try:
-        df = pd.read_csv("data/한국의약품안전관리원_병용금기약물_20240625_2.csv", encoding="cp949")
-        # 대소문자 및 공백에 구애받지 않는 검색을 위한 전처리 컬럼 생성
+        # 경로를 파일명으로만 변경
+        df = pd.read_csv("한국의약품안전관리원_병용금기약물_20240625_2.csv", encoding="cp949")
         df['성분명1_clean'] = df['성분명1'].astype(str).str.strip().str.lower()
         df['성분명2_clean'] = df['성분명2'].astype(str).str.strip().str.lower()
         return df
     except Exception as e:
         st.error(f"병용금기 데이터를 불러오는 중 오류가 발생했습니다: {e}")
         return None
-
+        
 # 데이터 미리 로드
 df_incident = load_incident_data()
 df_contra = load_contra_data()
