@@ -9,17 +9,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. 데이터 로드 함수 (경로 에러 방지를 위해 data/ 제거 후 유연하게 처리)
+# 2. 데이터 로드 함수
 @st.cache_data
 def load_incident_data():
-    # 여러 경로 후보를 탐색하여 안전하게 로드
     paths = ["한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv"]
     for p in paths:
-        try:
-            return pd.read_csv(p, encoding="cp949")
-        except FileNotFoundError:
-            continue
-    st.error("이상사례 데이터 파일을 찾을 수 없습니다. 파일명을 확인해주세요.")
+        try: return pd.read_csv(p, encoding="cp949")
+        except FileNotFoundError: continue
+    st.error("이상사례 데이터 파일을 찾을 수 없습니다.")
     return None
 
 @st.cache_data
@@ -28,22 +25,18 @@ def load_contra_data():
     for p in paths:
         try:
             df = pd.read_csv(p, encoding="cp949")
-            # 검색 정확도를 위해 문자열 처리 및 결측치 제거
-            df['성분명1'] = df['성분명1'].fillna('').astype(str).str.strip()
-            df['성분명2'] = df['성분명2'].fillna('').astype(str).str.strip()
-            df['성분명1_clean'] = df['성분명1'].str.lower()
-            df['성분명2_clean'] = df['성분명2'].str.lower()
+            # 모든 텍스트 컬럼 결측치 제거 및 문자열 변환
+            for col in ['성분명1', '성분명2', '제품명1', '제품명2']:
+                df[col] = df[col].fillna('').astype(str).str.strip()
             return df
-        except FileNotFoundError:
-            continue
-    st.error("병용금기 데이터 파일을 찾을 수 없습니다. 파일명을 확인해주세요.")
+        except FileNotFoundError: continue
+    st.error("병용금기 데이터 파일을 찾을 수 없습니다.")
     return None
 
-# 데이터 미리 로드
 df_incident = load_incident_data()
 df_contra = load_contra_data()
 
-# 3. 사이드바 메뉴 구성 (페이지 전환)
+# 3. 사이드바 메뉴
 st.sidebar.title("💊 메뉴 선택")
 page = st.sidebar.radio(
     "이동할 페이지를 선택하세요:",
@@ -56,125 +49,130 @@ page = st.sidebar.radio(
 if page == "Page 1: 왜 약을 섞어 먹으면 위험할까?":
     st.title("❓ 왜 약을 섞어 먹으면 위험할까?")
     st.markdown("---")
-    
     st.markdown("""
     ### 🚨 의약품 오남용과 병용금기 복용의 위험성
     우리가 흔히 접하는 감기약, 진통제, 영양제조차도 함께 분해되면서 서로의 성분에 영향을 미칠 수 있습니다. 
     특히 **'병용금기 약물'**이란 두 가지 이상의 의약품을 함께 복용했을 때, **부작용 발생 위험이 현저히 높아지거나 치료 효과가 급격히 저하되어 동시에 투여해서는 안 되는 성분 조합**을 뜻합니다.
-    
-    * **체내 독성 증가:** 한 약물이 다른 약물의 대사(분해)를 방해하여 몸속 약물 농도가 비정상적으로 높아지면 간, 신장 등에 치명적인 손상을 줄 수 있습니다.
-    * **심각한 부작용 초래:** 가벼운 구토나 두드러기부터 시작해 심한 경우 심부정맥, 호흡곤란, 종양용해증후군 등 위험한 상황에 직면할 수 있습니다.
     """)
     
-    st.write("")
-    st.subheader("📊 국내 의약품 이상사례 보고 현황 (최근 5개년 TOP 5)")
-    st.caption("출처: 한국의약품안전관리원 데이터 기반")
-    
     if df_incident is not None:
+        st.subheader("📊 국내 의약품 이상사례 보고 현황 (최근 5개년 TOP 5)")
         top_2024 = df_incident[['순위', '연도별증상(2024)', '연도별보고건수(2024)']].head(5)
         top_2024.columns = ['순위', '부작용 증상', '보고 건수(건)']
         
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.write("#### 2024년 다빈도 부작용 증상 순위")
             st.dataframe(top_2024, use_container_width=True, hide_index=True)
-            
         with col2:
-            fig = px.bar(
-                top_2024, 
-                x='부작용 증상', 
-                y='보고 건수(건)',
-                title="2024년 주요 부작용 보고 건수 그래프",
-                color='부작용 증상',
-                text_auto=True
-            )
-            fig.update_layout(showlegend=False)
+            fig = px.bar(top_2024, x='부작용 증상', y='보고 건수(건)', color='부작용 증상', text_auto=True)
+            fig.update_layout(showlegend=False, height=300)
             st.plotly_chart(fig, use_container_width=True)
-            
-    st.markdown("---")
-    st.info("💡 왼쪽 사이드바 메뉴에서 **'Page 2: 주요 병용금기 성분 가이드'**를 선택하시면 드시는 약물의 금기 성분을 직접 검색해보실 수 있습니다.")
 
 # ==========================================
-# PAGE 2: 주요 병용금기 성분 가이드
+# PAGE 2: 주요 병용금기 성분 가이드 (대폭 수정)
 # ==========================================
 elif page == "Page 2: 주요 병용금기 성분 가이드":
     st.title("🔍 알아두어야 할 주요 병용금기 성분 가이드")
-    st.markdown("사용자가 확인하고자 하는 약물의 **성분명(한국어 또는 영어)**을 입력하면 함께 먹으면 안 되는 성분과 부작용 요약을 보여줍니다.")
+    st.markdown("어려운 성분명을 몰라도 괜찮습니다! **약물 이름(제품명)** 또는 **성분명**을 편하게 입력하여 복용 중이거나 복용 예정인 약들을 **여러 개 선택**해 보세요.")
     st.markdown("---")
     
     if df_contra is not None:
-        # 1. 고유 성분명 목록 전체 추출 (성분명1과 성분명2 합치기)
-        ing1 = df_contra['성분명1'].unique()
-        ing2 = df_contra['성분명2'].unique()
-        all_ingredients = sorted(list(set(ing1) | set(ing2)))
-        # 빈 문자열 제거
-        all_ingredients = [x for x in all_ingredients if x.strip()]
+        # 매핑용 사전 데이터 구축 (검색 효율화 및 일반인 편의성 향상)
+        # 약물 사전: { "표시할 이름 (제품명 또는 성분명)": "실제 내부 성분명" }
+        drug_dict = {}
         
-        # 2. 통합 검색창 구성 (한국어/영어 모두 입력 가능)
-        search_input = st.text_input("💊 성분명을 입력하세요 (한글 또는 영문):", placeholder="예: 아스피린, ibuprofen, venetoclax 등")
+        for _, row in df_contra.iterrows():
+            ing1, ing2 = row['성분명1'], row['성분명2']
+            prod1, prod2 = row['제품명1'], row['제품명2']
+            
+            # 성분명 등록
+            if ing1: drug_dict[f"[성분] {ing1}"] = ing1
+            if ing2: drug_dict[f"[성분] {ing2}"] = ing2
+            # 제품명 등록 (사용자가 찾기 쉽게 제품명 뒤에 성분명도 괄호로 표기)
+            if prod1 and ing1: drug_dict[f"[제품] {prod1} ({ing1})"] = ing1
+            if prod2 and ing2: drug_dict[f"[제품] {prod2} ({ing2})"] = ing2
+
+        # 가나다 및 알파벳 순 정렬
+        sorted_display_names = sorted(list(drug_dict.keys()))
         
-        selected_ingredient = ""
+        # 🌟 핵심 기능: 멀티 셀렉트 박스 (원하는 약물을 여러 개 선택 가능)
+        selected_displays = st.multiselect(
+            "💊 복용 중이거나 확인할 약물들을 모두 선택하세요 (한글/영문 검색 가능):",
+            options=sorted_display_names,
+            placeholder="예: 타이레놀, 아스피린, ibuprofen 등을 검색하여 선택"
+        )
         
-        # 무언가 타이핑 했을 때 자동완성 리스트 박스를 아래에 동적으로 띄워줌
-        if search_input:
-            search_keyword = search_input.lower().strip()
-            filtered_list = [ing for ing in all_ingredients if search_keyword in ing.lower()]
+        # 사용자가 선택한 아이템들의 실제 '성분명' 리스트 추출
+        selected_ingredients = list(set([drug_dict[name] for name in selected_displays]))
+        
+        if selected_displays:
+            st.markdown("### 🛒 선택한 약물 성분 목록")
+            st.write(", ".join([f"`{ing}`" for ing in selected_ingredients]))
             
-            if filtered_list:
-                selected_ingredient = st.selectbox(
-                    f"💡 '{search_input}' 관련 성분 검색 결과입니다. 정확한 성분을 선택하세요:",
-                    options=filtered_list
-                )
-            else:
-                st.warning("⚠️ 일치하는 성분명이 검색되지 않았습니다. 다른 성분명이나 철자를 확인해 주세요.")
-        else:
-            # 아무것도 입력 안 했을 때는 전체 리스트에서 직접 고를 수 있는 기본 선택창 제공
-            selected_ingredient = st.selectbox(
-                "또는 아래의 전체 리스트에서 성분명을 직접 선택하세요:",
-                options=["선택하세요"] + all_ingredients
-            )
+            st.markdown("---")
+            st.markdown("### 🛡️ 병용금기 교차 검증 결과")
             
-        # 3. 결과 출력 로직
-        if selected_ingredient and selected_ingredient != "선택하세요":
-            st.markdown(f"### 🛡️ '{selected_ingredient}' 관련 병용금기 검색 결과")
+            # 1단계: 선택한 약물들 '끼리' 서로 금기 조합이 있는지 검사 (상호 교차 검증)
+            danger_pairs_found = False
             
-            clean_name = selected_ingredient.lower().strip()
-            
-            # 성분명1 혹은 성분명2에 매칭되는 데이터 필터링
-            res_df = df_contra[
-                (df_contra['성분명1_clean'] == clean_name) | 
-                (df_contra['성분명2_clean'] == clean_name)
-            ]
-            
-            if not res_df.empty:
-                display_data = []
-                for _, row in res_df.iterrows():
-                    # 검색한 성분이 1번에 있으면 상대 성분은 2번, 반대면 1번으로 정의
-                    if str(row['성분명1']).lower().strip() == clean_name:
-                        my_prod = row['제품명1']
-                        contra_ing = row['성분명2']
-                        contra_prod = row['제품명2']
-                    else:
-                        my_prod = row['제품명2']
-                        contra_ing = row['성분명1']
-                        contra_prod = row['제품명1']
+            if len(selected_ingredients) >= 2:
+                st.subheader("🚨 내 장바구니 약물 간 위험 조합 체크")
+                
+                # 선택된 성분들의 쌍(Pair)을 확인
+                for i in range(len(selected_ingredients)):
+                    for j in range(i + 1, len(selected_ingredients)):
+                        ingA = selected_ingredients[i]
+                        ingB = selected_ingredients[j]
                         
-                    display_data.append({
-                        "조회성분 제품 예시": my_prod,
-                        "함께 먹으면 안 되는 성분": contra_ing,
-                        "상대성분 제품 예시": contra_prod,
-                        "금기 사유": row['금기사유']
-                    })
+                        # 두 성분이 데이터베이스에서 병용금기로 묶여있는지 확인
+                        match_df = df_contra[
+                            ((df_contra['성분명1'] == ingA) & (df_contra['성분명2'] == ingB)) |
+                            ((df_contra['성분명1'] == ingB) & (df_contra['성분명2'] == ingA))
+                        ]
+                        
+                        if not match_df.empty:
+                            danger_pairs_found = True
+                            reason = match_df.iloc[0]['금기사유']
+                            st.error(f"⚠️ **위험! 동시 복용 금지**: `{ingA}` 와 `{ingB}` 조합은 함께 드시면 안 됩니다.")
+                            st.caption(f"**이유/부작용:** {reason}")
                 
-                # 중복 행 제거 후 정렬
-                display_df = pd.DataFrame(display_data).drop_duplicates()
-                st.write(f"총 **{len(display_df)}**개의 병용금기 조합이 조회되었습니다.")
+                if not danger_pairs_found:
+                    st.success("✅ 선택하신 약물들 상호 간에는 함께 먹으면 안 되는 금기 조합이 발견되지 않았습니다.")
+            
+            # 2단계: 선택한 각 약물들이 '전체 데이터베이스'에서 어떤 약들과 금기인지 개별 조회 리스트 제공
+            st.write("")
+            st.subheader("🔍 각 약물별 전체 병용금기 상대 성분 안내")
+            st.caption("내가 선택한 약이 이외에 또 어떤 약들과 만나면 안 되는지 개별적으로 확인할 수 있습니다.")
+            
+            for ing in selected_ingredients:
+                res_df = df_contra[(df_contra['성분명1'] == ing) | (df_contra['성분명2'] == ing)]
                 
-                # 결과 카드식 배열
-                for idx, row in display_df.iterrows():
-                    with st.expander(f"❌ 병용 금기 성분: {row['함께 먹으면 안 되는 성분']}"):
-                        st.markdown(f"**· 내가 검색한 성분의 제품 예시:** {row['조회성분 제품 예시']}")
-                        st.markdown(f"**· 같이 먹으면 위험한 약 제품 예시:** {row['상대성분 제품 예시']}")
-                        st.error(f"**· 위험성 및 부작용 사유:**\n\n{row['금기 사유']}")
-            else:
-                st.success("✅ 해당 성분은 현재 데이터베이스 내에 등록된 병용금기 조합 정보가 없습니다.")
+                with st.expander(f"📋 {ing} 성분의 전체 금기 리스트 보기 (총 {len(res_df)}건)"):
+                    if not res_df.empty:
+                        display_data = []
+                        for _, row in res_df.iterrows():
+                            if row['성분명1'] == ing:
+                                contra_ing = row['성분명2']
+                                contra_prod = row['제품명2']
+                            else:
+                                contra_ing = row['성분명1']
+                                contra_prod = row['제품명1']
+                                
+                            display_data.append({
+                                "함께 먹으면 안 되는 성분": contra_ing,
+                                "상대 약물 제품명 예시": contra_prod,
+                                "위험 사유": row['금기사유']
+                            })
+                        
+                        display_df = pd.DataFrame(display_data).drop_duplicates()
+                        
+                        # 표 형태로 깔끔하게 출력
+                        st.dataframe(
+                            display_df, 
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.write("이 성분은 데이터베이스에 등록된 금기 조합이 없습니다.")
+        else:
+            st.info("💡 위의 검색창에 드시는 약 이름을 한글이나 영어로 입력하여 선택해 주세요. 여러 개를 동시에 고를 수 있습니다.")
