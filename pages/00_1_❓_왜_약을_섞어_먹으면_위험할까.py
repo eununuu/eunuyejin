@@ -14,15 +14,12 @@ st.markdown("""
 * **심각한 부작용 초래:** 가벼운 구토나 두드러기부터 시작해 심한 경우 심부정맥, 호흡곤란, 종양용해증후군 등 위험한 상황에 직면할 수 있습니다.
 """)
 
-# 데이터 로드 함수 (경로 유연화 및 캐싱)
 @st.cache_data
 def load_incident_data():
     paths = ["한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv", "data/한국의약품안전관리원_연도별증상별 이상사례보고현황_20241231.csv"]
     for p in paths:
-        try:
-            return pd.read_csv(p, encoding="cp949")
-        except:
-            continue
+        try: return pd.read_csv(p, encoding="cp949")
+        except: continue
     return None
 
 df_incident = load_incident_data()
@@ -51,7 +48,7 @@ if df_incident is not None:
             )
             fig.update_layout(showlegend=False, height=300)
             st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
+    except:
         st.warning("시각화 데이터를 처리하는 중 일부 문제가 발생했습니다.")
 else:
-    st.warning("⚠️ 이상사례 보고현황 CSV 데이터를 찾을 수 없어 통계 그래프를 표시할 수 없습니다.")
+    st.warning("⚠️ 이상사례 보고현황 CSV 데이터를 찾을 수 없습니다.")
