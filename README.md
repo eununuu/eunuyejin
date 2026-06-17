@@ -17,8 +17,8 @@
 
 ## 🔗 사용 데이터 출처 (공공데이터포털)
 본 서비스는 공공데이터포털에서 제공하는 안전성이 검증된 실시간 의약품 데이터를 활용합니다.
-* [한국의약품안전관리원_연도별증상별 이상사례보고현황](https://www.data.go.kr/data/15089525/fileData.do)
-* [한국의약품안전관리원_병용금기약물](https://www.data.go.kr/data/15089543/fileData.do)
+* [한국의약품안전관리원_연도별증상별 이상사례보고현황](https://www.data.go.kr/data/15089543/fileData.do)
+* [한국의약품안전관리원_병용금기약물](https://www.data.go.kr/data/15089525/fileData.do)
 
 ---
 
