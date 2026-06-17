@@ -6,23 +6,27 @@ st.title("🔍 알아두어야 할 주요 병용금기 성분 가이드")
 st.markdown("데이터베이스에 등록된 **실제 약물 이름(제품명)** 또는 **성분명**을 선택하여 복용 중인 약을 여러 개 체크해 보세요.")
 st.markdown("---")
 
+# 데이터 로드 함수 (인코딩을 실제 데이터 포맷인 utf-8로 수정 완료)
 @st.cache_data
 def load_contra_data():
     paths = ["한국의약품안전관리원_병용금기약물_20240625_2.csv", "data/한국의약품안전관리원_병용금기약물_20240625_2.csv"]
     for p in paths:
         try:
-            df = pd.read_csv(p, encoding="cp949")
+            df = pd.read_csv(p, encoding="utf-8")
             for col in ['성분명1', '성분명2', '제품명1', '제품명2']:
                 df[col] = df[col].fillna('').astype(str).str.strip()
             return df
-        except: continue
+        except:
+            continue
     return None
 
 df_contra = load_contra_data()
 
 if df_contra is not None:
+    # 제품명 가공 함수
     def clean_product_name(name):
-        if not name: return ""
+        if not name: 
+            return ""
         name = re.sub(r'_\(.*?\)|\(.*?\)|_.*?밀리그램|_.*?mg|_.*?밀리그람', '', name)
         return name.strip()
 
@@ -79,10 +83,8 @@ if df_contra is not None:
                     ingA = selected_ingredients[i]
                     ingB = selected_ingredients[j]
                     
+                    # ⚠️ 오타(성분mm2) 수정 및 정확한 컬럼 매칭 완료
                     match_df = df_contra[
-                        ((df_contra['성분명1'] == ingA) & (df_contra['성분mm2'] == ingB)) | # 데이터 매칭
-                        ((df_contra['성분명1'] == ingB) & (df_contra['성분명2'] == ingA))
-                    ] if '성분명2' in df_contra.columns else df_contra[
                         ((df_contra['성분명1'] == ingA) & (df_contra['성분명2'] == ingB)) |
                         ((df_contra['성분명1'] == ingB) & (df_contra['성분명2'] == ingA))
                     ]
@@ -100,7 +102,8 @@ if df_contra is not None:
         st.subheader("🔍 각 약물별 전체 병용금기 상대 성분 안내")
         
         for ing in selected_ingredients:
-            res_df = df_contra[(df_contra['성분mm1' if '성분mm1' in df_contra.columns else '성분명1'] == ing) | (df_contra['성분명2'] == ing)]
+            # ⚠️ 오타(성분mm1) 수정 완료
+            res_df = df_contra[(df_contra['성분명1'] == ing) | (df_contra['성분명2'] == ing)]
             with st.expander(f"📋 {ing} 성분의 전체 금기 리스트 보기 (총 {len(res_df)}건)"):
                 if not res_df.empty:
                     display_data = []
