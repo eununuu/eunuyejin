@@ -1,26 +1,44 @@
 import streamlit as st
 import pandas as pd
 import re
+import os  # 경로 처리를 위해 os 라이브러리 추가
 
 st.title("🔍 알아두어야 할 주요 병용금기 성분 가이드")
 st.markdown("데이터베이스에 등록된 **실제 약물 이름(제품명)** 또는 **성분명**을 선택하여 복용 중인 약을 여러 개 체크해 보세요.")
 st.markdown("---")
 
-# 데이터 로드 함수 (인코딩을 실제 데이터 포맷인 utf-8로 수정 완료)
+# ✨ 서버 환경에서 에러가 절대 나지 않는 무적의 데이터 로드 함수
 @st.cache_data
 def load_contra_data():
-    paths = ["한국의약품안전관리원_병용금기약물_20240625_2.csv", "data/한국의약품안전관리원_병용금기약물_20240625_2.csv"]
-    for p in paths:
-        try:
-            df = pd.read_csv(p, encoding="utf-8")
-            for col in ['성분명1', '성분명2', '제품명1', '제품명2']:
-                df[col] = df[col].fillna('').astype(str).str.strip()
-            return df
-        except:
-            continue
+    # 찾고자 하는 파일명 정의
+    filename = "한국의약품안전관리원_병용금기약물_20240625_2.csv"
+    
+    # 시스템이 탐색할 후보 경로들 (현재폴더, pages폴더의 부모폴더, data폴더 등)
+    possible_paths = [
+        filename,
+        os.path.join("data", filename),
+        os.path.join("..", filename),
+        os.path.join("..", "data", filename)
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            # 파일을 찾았다면 인코딩을 다각도로 시도하여 로드
+            for encoding_type in ["utf-8", "cp949", "utf-8-sig"]:
+                try:
+                    df = pd.read_csv(path, encoding=encoding_type)
+                    # 데이터 전처리
+                    for col in ['성분명1', '성분명2', '제품명1', '제품명2']:
+                        if col in df.columns:
+                            df[col] = df[col].fillna('').astype(str).str.strip()
+                    return df
+                except Exception:
+                    continue
     return None
 
 df_contra = load_contra_data()
+
+# (이후 multiselect 및 교차 검증 코드는 기존과 동일)
 
 if df_contra is not None:
     # 제품명 가공 함수
